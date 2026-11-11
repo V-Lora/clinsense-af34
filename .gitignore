@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+mosquitto/config/passwd
+mosquitto/data/
+minio-data/
+.localstack/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+build/
+.venv/
+__pycache__/
+*.pyc
+certs/
+.DS_Store
