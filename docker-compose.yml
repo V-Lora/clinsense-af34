@@ -7,7 +7,7 @@ services:
     environment:
       - SERVICES=s3,dynamodb,lambda,sns,iam,sts,firehose,logs
       - DEBUG=0
-      - PERSISTENCE=0
+      - PERSISTENCE=1
       - DYNAMODB_REMOVE_EXPIRED_ITEMS=1
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
     volumes:
