@@ -17,3 +17,15 @@
 **Provider configurado para LocalStack.** Todas as chamadas sao redirecionadas para `http://localhost:4566`, com credenciais ficticias e validacao de conta desativada. O mesmo codigo serve para a AWS real trocando apenas o bloco `endpoints`.
 
 **Integracao SNS para Lambda validada.** O teste publicou no topico e o log da funcao registrou um segundo RequestId, confirmando que a assinatura nao ficou em `PendingConfirmation`.
+
+## Prevencao de recursao SNS para Lambda (Fase 5)
+
+**Problema.** A funcao `clinsense-processador` publica alertas no topico `clinsense-alertas` e tambem esta inscrita nele. Cada publicacao reentregava o alerta para a propria funcao, que gravava e publicava novamente, gerando laco infinito. O defeito era invisivel na tabela DynamoDB: como o relay do SNS preserva o `timestamp`, a chave `device_id` + `timestamp` se repetia e o `put_item` sobrescrevia o registro anterior em vez de criar uma linha nova. O laco so podia ser detectado pelo log de execucao.
+
+**Evidencia.** Uma unica invocacao do sensor-02 gerou nove RequestIds consecutivos em aproximadamente 300 ms, todos com `gravado` e `alerta publicado`, enquanto o `scan` permanecia com dois itens.
+
+**Decisao.** O handler retorna imediatamente quando o evento contem `Records`, indicando invocacao originada do proprio topico. Nesse caminho a funcao registra `notificacao ignorada` e nao grava nem republica nada.
+
+**Validacao.** Uma invocacao do sensor-03 produziu exatamente duas execucoes: `gravado` + `alerta publicado` (19,98 ms) e `notificacao ignorada` (1,84 ms), sem execucoes posteriores. O custo do descarte e cerca de dez vezes menor que o do processamento real.
+
+**Alternativa considerada.** Separar o topico de ingestao do topico de notificacao eliminaria o laco por arquitetura. Foi descartada nesta entrega por exigir um segundo topico e uma nova assinatura, mantendo a solucao atual como suficiente para o escopo.
