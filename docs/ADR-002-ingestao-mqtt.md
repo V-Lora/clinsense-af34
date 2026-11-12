@@ -31,3 +31,15 @@ Publish de `sensor-MQTT` com 11,2 C produziu:
 ## Limitacoes
 
 A ponte roda sob demanda, nao como servico persistente. Para operacao continua seria necessario um listener em background ou integracao nativa do LocalStack com MQTT.
+
+## Gravacao do payload bruto no data lake (Fase 7)
+
+**Decisao.** O handler grava cada leitura no bucket `clinsense-raw`, na chave `leituras/{device_id}/{timestamp}.json`, antes de escrever no DynamoDB.
+
+**Ordem das operacoes.** O `put_object` vem depois da guarda de `Records`. A notificacao devolvida pelo SNS nao grava no S3, evitando duplicidade no data lake — o mesmo motivo que levou a guarda a existir para o DynamoDB.
+
+**Tolerancia a falha.** A chamada ao S3 esta envolvida em `try/except`. Uma indisponibilidade do data lake registra o erro no log mas nao descarta a leitura: o `put_item` no DynamoDB continua acontecendo. A ingestao tem prioridade sobre a camada analitica.
+
+**Configuracao.** Nenhuma alteracao no Terraform foi necessaria: a variavel `BUCKET` ja estava injetada no ambiente da funcao e a politica IAM ja concedia `s3:PutObject`.
+
+**Validacao.** Apos o deploy, a leitura de `sensor-MQTT` com 11,2 C produziu o objeto `leituras/sensor-MQTT/1794514287.json` com 49 bytes contendo o payload original, e o registro correspondente no DynamoDB com `alerta: true`.
