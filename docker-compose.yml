@@ -1,0 +1,32 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: clinsense-localstack
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      - SERVICES=s3,dynamodb,lambda,sns,iam,sts,firehose,logs
+      - DEBUG=0
+      - PERSISTENCE=0
+      - DYNAMODB_REMOVE_EXPIRED_ITEMS=1
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./.localstack:/var/lib/localstack"
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal s3 ls >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: clinsense-mosquitto
+    ports:
+      - "127.0.0.1:1883:1883"
+    volumes:
+      - "./mosquitto/config:/mosquitto/config:ro"
+      - "./mosquitto/data:/mosquitto/data"
+    depends_on:
+      - localstack

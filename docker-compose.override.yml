@@ -1,0 +1,8 @@
+services:
+  localstack:
+    mem_limit: 3g
+    cpus: 2
+
+  mosquitto:
+    mem_limit: 256m
+    cpus: 0.5
