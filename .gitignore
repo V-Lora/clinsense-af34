@@ -15,12 +15,6 @@ __pycache__/
 *.pyc
 certs/
 .DS_Store
-.localstack/
-mosquitto/data/
-mosquitto/config/passwd
-.env
-.terraform/
-*.tfstate
 *.tfstate.backup
 *.tfstate.lock.info
 infra/build/

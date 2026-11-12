@@ -26,7 +26,5 @@ services:
     ports:
       - "127.0.0.1:1883:1883"
     volumes:
-      - "./mosquitto/config:/mosquitto/config:ro"
+      - "./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"
       - "./mosquitto/data:/mosquitto/data"
-    depends_on:
-      - localstack
