@@ -15,12 +15,14 @@ if ENDPOINT:
 
 dynamodb = boto3.resource("dynamodb", **conexao)
 tabela = dynamodb.Table(os.environ["TABLE"])
+s3 = boto3.client("s3", **conexao)
 sns = boto3.client("sns", **conexao)
 
 
 def lambda_handler(event, context):
     leitura = extrair_leitura(event)
 
+    # Invocacao vinda do proprio topico SNS: nao grava nem republica.
     if "Records" in event:
         print(f"notificacao ignorada: {leitura.get('device_id')}")
         return {"statusCode": 200, "body": json.dumps({"ignorado": True})}
@@ -29,6 +31,18 @@ def lambda_handler(event, context):
     temperatura = Decimal(str(leitura["temperatura"]))
     timestamp = int(leitura.get("timestamp", time.time()))
     alerta = temperatura > LIMITE
+
+    # Camada bruta no data lake: falha aqui nao descarta a leitura.
+    try:
+        s3.put_object(
+            Bucket=os.environ["BUCKET"],
+            Key=f"leituras/{device_id}/{timestamp}.json",
+            Body=json.dumps(leitura),
+            ContentType="application/json",
+        )
+        print(f"s3 gravado: {device_id}/{timestamp}")
+    except Exception as erro:
+        print(f"falha ao gravar no s3: {erro}")
 
     tabela.put_item(Item={
         "device_id": device_id,
