@@ -19,3 +19,9 @@ certs/
 mosquitto/data/
 mosquitto/config/passwd
 .env
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+infra/build/
+main.tf.bak
