@@ -31,8 +31,8 @@ def montar_pacientes():
 
 
 def normal():
-    bpm = max(55, min(105, random.gauss(75, 8)))
-    spo2 = max(94, min(100, random.gauss(97, 1.5)))
+    bpm = max(45, min(110, random.gauss(75, 8)))
+    spo2 = max(90, min(100, random.gauss(97, 2)))
     return round(bpm), round(spo2)
 
 
