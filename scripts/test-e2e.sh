@@ -21,7 +21,7 @@ aws_ dynamodb scan --table-name "$TABELA" \
   done
 
 echo "== 2/5 limpando S3 =="
-aws_ s3 ls "s3://$BUCKET/leituras/" --recursive 2>/dev/null | awk '{print $4}' \
+aws_ s3 ls "s3://$BUCKET/leituras/" --recursive 2>/dev/null | grep '\.json' | awk '{print $4}' \
 | while read -r chave; do
     [ -z "${chave:-}" ] && continue
     aws_ s3 rm "s3://$BUCKET/$chave" >/dev/null
