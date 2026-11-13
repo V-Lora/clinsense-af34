@@ -22,3 +22,6 @@ main.tf.bak
 minio-data/
 mosquitto/config/passwd
 mosquitto/data/
+logs/
+prints/
+pipeline_firehose.tf.desativado
