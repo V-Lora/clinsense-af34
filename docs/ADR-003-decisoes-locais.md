@@ -1,4 +1,6 @@
-# ADR-001 — Pipeline Clinsense
+> **Nota de revisão (13/11/2026):** o MinIO foi reintroduzido no compose no commit `5d01460` e opera em `127.0.0.1:9000`. A decisão de substituí-lo pelo S3 do LocalStack, registrada abaixo, foi revertida. O restante deste documento continua válido.
+
+# ADR-003 — Decisões de infraestrutura local
 
 ## Decisões de infraestrutura local (nov/2026)
 

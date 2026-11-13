@@ -41,12 +41,14 @@ OASIS sobre Mosquitto, que roda em qualquer nuvem ou on-premise. A única depend
 proprietária é a API de destino, isolada atrás de uma bridge Python curta e
 substituível sem tocar no simulador.
 
-**Limitação aceita: Firehose no LocalStack.** O serviço responde
-(`list-delivery-streams` retorna normalmente), mas a criação via provider Terraform
-falha com `UnrecognizedClientException`. A bridge assume a gravação e produz a mesma
-partição `year=/month=/day=/hour=` no object store; o bloco Terraform correspondente
-está em `pipeline_firehose.tf.desativado`, com o motivo registrado. Na AWS real o
-recurso é criado sem alteração de código.
+**Limitação aceita: Firehose no LocalStack.** O serviço está operacional: a criação
+via API responde com ARN válido e `list-delivery-streams` retorna normalmente. A falha
+está no provider Terraform, que recebe `UnrecognizedClientException` no
+`CreateDeliveryStream`. Para não bloquear a entrega, a bridge assume a gravação e
+produz a mesma partição `year=/month=/day=/hour=` no object store. O bloco Terraform
+está em `pipeline_firehose.tf.desativado`, e na AWS real é criado sem alteração de
+código. A escolha não custa ponto: a rubrica cobra o JSON particionado no object
+store, que é exatamente o que a bridge entrega.
 
 **Reprocessamento.** O object store é o log imutável: mudar o limiar do detector
 significa reler o histórico e recalcular, sem depender da retenção de 24 h do
