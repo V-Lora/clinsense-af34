@@ -12,7 +12,7 @@
 
 **Bucket importado, nao recriado.** O bucket `clinsense-raw` ja existia desde a Fase 3. Foi incorporado ao state com `terraform import aws_s3_bucket.raw clinsense-raw`, evitando conflito de nome.
 
-**Aplicacao em tres ciclos.** A politica IAM dependente do role e o trigger do SNS so foram aplicados depois que a base existia, porque o LocalStack falha na propagacao de role dentro do mesmo apply. Total: 4 + 1 + 2 recursos.
+**Aplicacao em ciclos.** Na montagem inicial a politica IAM dependente do role e o trigger do SNS exigiram applies separados, porque o LocalStack pode falhar na propagacao de role dentro do mesmo apply (total 4 + 1 + 2 recursos). Em execucoes posteriores, com o ambiente estavel, os 7 recursos foram criados em um unico apply; quando o LocalStack perde o estado, um novo apply recria tudo de uma vez.
 
 **Provider configurado para LocalStack.** Todas as chamadas sao redirecionadas para `http://localhost:4566`, com credenciais ficticias e validacao de conta desativada. O mesmo codigo serve para a AWS real trocando apenas o bloco `endpoints`.
 
