@@ -63,3 +63,28 @@ O ambiente nao e reproduzivel de forma automatica. Ao reiniciar os containers,
 o DynamoDB preserva o estado mas S3, Lambda, SNS e IAM se perdem e exigem
 terraform apply. O bucket volta vazio, entao registros antigos da tabela ficam
 sem objeto correspondente e devem ser removidos manualmente.
+
+## Log imutável para replay
+
+O log imutável do pipeline é o object store (MinIO no Caminho B, S3 no Caminho A):
+cada leitura fica como JSON cru particionado em year=/month=/day=/hour= e nunca é
+reescrita. Se o algoritmo de detecção mudasse amanhã e precisasse recalcular seis
+meses, a resposta seria uma nova varredura nesse prefixo — os dados originais
+continuam intactos.
+
+O DynamoDB Streams não serve para isso. Sua retenção máxima é de 24 horas, e a
+tabela clinsense_quente apaga por TTL de 24 h por definição: é cache com prazo, não
+arquivo. A tabela clinsense_alertas guarda 30 dias do resultado do detector —
+também insuficiente para recalcular seis meses.
+
+## Autoria e uso de IA
+
+Usamos assistência de IA para levantar o esqueleto inicial do docker-compose.yml, o
+boilerplate do handler da Lambda, a estrutura dos scripts de demonstração e a redação
+inicial da Parte A do relatório. Revisamos manualmente e corrigimos: o handler
+(guard contra a recursão do SNS, leitura de Records e chave patient_id+ts), o up.sh
+(geração de senha por openssl rand e idempotência), o bridge.py (tolerância à ausência
+do Firehose e invocação da Lambda) e o simulador (média e desvio do enunciado, janela
+da anomalia). As decisões de arquitetura — AP/PACELC, escolha do buffer, divisão
+quente/frio e o recorte da LGPD do oferente — são do grupo. As capturas e o screencast
+foram produzidos por nós, com o ambiente rodando.
