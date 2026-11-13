@@ -14,9 +14,6 @@ variable "bucket_name" {
   default = "clinsense-raw"
 }
 
-variable "table_name" {
-  default = "clinsense-leituras"
-}
 
 variable "topic_name" {
   default = "clinsense-alertas"

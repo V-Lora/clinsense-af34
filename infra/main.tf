@@ -36,22 +36,6 @@ resource "aws_s3_bucket" "raw" {
   bucket = var.bucket_name
 }
 
-resource "aws_dynamodb_table" "leituras" {
-  name         = var.table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "device_id"
-  range_key    = "timestamp"
-
-  attribute {
-    name = "device_id"
-    type = "S"
-  }
-
-  attribute {
-    name = "timestamp"
-    type = "N"
-  }
-}
 
 resource "aws_sns_topic" "alertas" {
   name = var.topic_name
@@ -88,9 +72,15 @@ resource "aws_lambda_function" "processador" {
 
   environment {
     variables = {
-      BUCKET    = aws_s3_bucket.raw.bucket
-      TABLE     = aws_dynamodb_table.leituras.name
-      SNS_TOPIC = aws_sns_topic.alertas.arn
+      BUCKET         = aws_s3_bucket.raw.bucket
+      TABELA_QUENTE  = "clinsense_quente"
+      TABELA_ALERTAS = "clinsense_alertas"
+      TOPICO_SNS     = aws_sns_topic.alertas.arn
+      TABLE          = "clinsense_quente"
+      SNS_TOPIC      = aws_sns_topic.alertas.arn
+      BPM_MAX        = "120"
+      BPM_MIN        = "50"
+      SPO2_MIN       = "92"
     }
   }
 }
