@@ -1,87 +1,90 @@
+"""Detector ClinSense - grava no quente, avalia limiares e alerta via SNS."""
 import json
 import os
 import time
-from decimal import Decimal
+from datetime import datetime, timezone
 
 import boto3
 
-REGIAO = os.environ.get("AWS_REGION", "us-east-1")
-LIMITE = Decimal(os.environ.get("LIMITE_TEMPERATURA", "8.0"))
-ENDPOINT = os.environ.get("AWS_ENDPOINT_URL")
+TABELA_QUENTE = os.getenv("TABELA_QUENTE", "clinsense_quente")
+TABELA_ALERTAS = os.getenv("TABELA_ALERTAS", "clinsense_alertas")
+TOPICO_SNS = os.getenv("TOPICO_SNS", "")
 
-conexao = {"region_name": REGIAO}
-if ENDPOINT:
-    conexao["endpoint_url"] = ENDPOINT
+BPM_MAX = int(os.getenv("BPM_MAX", "120"))
+BPM_MIN = int(os.getenv("BPM_MIN", "50"))
+SPO2_MIN = int(os.getenv("SPO2_MIN", "92"))
 
-dynamodb = boto3.resource("dynamodb", **conexao)
-tabela = dynamodb.Table(os.environ["TABLE"])
-s3 = boto3.client("s3", **conexao)
-sns = boto3.client("sns", **conexao)
+ddb = boto3.resource("dynamodb")
+sns = boto3.client("sns")
 
 
 def lambda_handler(event, context):
-    leitura = extrair_leitura(event)
+    leitura = event
 
-    # Invocacao vinda do proprio topico SNS: nao grava nem republica.
-    if "Records" in event:
-        print(f"notificacao ignorada: {leitura.get('device_id')}")
-        return {"statusCode": 200, "body": json.dumps({"ignorado": True})}
+    if isinstance(event, dict) and "detail" in event:
+        leitura = event["detail"]
 
-    device_id = leitura["device_id"]
-    temperatura = Decimal(str(leitura["temperatura"]))
-    timestamp = int(leitura.get("timestamp", time.time()))
-    alerta = temperatura > LIMITE
+    if isinstance(event, dict) and "Records" in event:
+        reg = event["Records"][0]
+        if reg.get("EventSource") == "aws:sns":
+            print(json.dumps({"ignorado": "notificacao do proprio SNS"}))
+            return {"statusCode": 200, "body": "{}"}
+        corpo = reg.get("Sns", {}).get("Message") or reg.get("body", "{}")
+        leitura = json.loads(corpo) if isinstance(corpo, str) else corpo
 
-    # Camada bruta no data lake: falha aqui nao descarta a leitura.
-    try:
-        s3.put_object(
-            Bucket=os.environ["BUCKET"],
-            Key=f"leituras/{device_id}/{timestamp}.json",
-            Body=json.dumps(leitura),
-            ContentType="application/json",
-        )
-        print(f"s3 gravado: {device_id}/{timestamp}")
-    except Exception as erro:
-        print(f"falha ao gravar no s3: {erro}")
+    patient_id = leitura.get("patient_id")
+    if not patient_id:
+        print(json.dumps({"erro": "payload sem patient_id", "recebido": str(leitura)}))
+        return {"statusCode": 400, "body": "{}"}
 
-    tabela.put_item(Item={
-        "device_id": device_id,
-        "timestamp": timestamp,
-        "temperatura": temperatura,
-        "alerta": alerta,
-    })
-    print(f"gravado: {device_id} {temperatura}C alerta={alerta}")
+    bpm = int(leitura.get("bpm", 0))
+    spo2 = int(leitura.get("spo2", 0))
+    ts = leitura.get("ts") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    agora = int(time.time())
 
-    if alerta:
+    ddb.Table(TABELA_QUENTE).put_item(
+        Item={
+            "patient_id": patient_id,
+            "ts": ts,
+            "bpm": bpm,
+            "spo2": spo2,
+            "ttl": agora + 24 * 3600,
+        }
+    )
+
+    motivos = []
+    if bpm > BPM_MAX:
+        motivos.append("bpm %d acima de %d" % (bpm, BPM_MAX))
+    if bpm < BPM_MIN:
+        motivos.append("bpm %d abaixo de %d" % (bpm, BPM_MIN))
+    if spo2 < SPO2_MIN:
+        motivos.append("spo2 %d abaixo de %d" % (spo2, SPO2_MIN))
+
+    if not motivos:
+        print(json.dumps({"patient_id": patient_id, "bpm": bpm, "spo2": spo2, "alerta": False}))
+        return {"statusCode": 200, "body": json.dumps({"grava­do": True, "alerta": False})}
+
+    texto = "; ".join(motivos)
+
+    ddb.Table(TABELA_ALERTAS).put_item(
+        Item={
+            "patient_id": patient_id,
+            "ts": ts,
+            "bpm": bpm,
+            "spo2": spo2,
+            "motivo": texto,
+            "ttl": agora + 30 * 24 * 3600,
+        }
+    )
+
+    if TOPICO_SNS:
         sns.publish(
-            TopicArn=os.environ["SNS_TOPIC"],
-            Subject=f"Alerta de temperatura: {device_id}",
-            Message=json.dumps({
-                "device_id": device_id,
-                "temperatura": float(temperatura),
-                "limite": float(LIMITE),
-                "timestamp": timestamp,
-            }),
+            TopicArn=TOPICO_SNS,
+            Subject="ClinSense alerta %s" % patient_id,
+            Message=json.dumps(
+                {"patient_id": patient_id, "ts": ts, "bpm": bpm, "spo2": spo2, "motivo": texto}
+            ),
         )
-        print(f"alerta publicado: {device_id}")
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps({"gravado": True, "alerta": alerta, "device_id": device_id}),
-    }
-
-
-def extrair_leitura(event):
-    if "Records" in event and event["Records"]:
-        corpo = event["Records"][0]["Sns"]["Message"]
-    elif "body" in event:
-        corpo = event["body"]
-    else:
-        corpo = event
-
-    dados = json.loads(corpo) if isinstance(corpo, str) else corpo
-
-    if "device_id" not in dados or "temperatura" not in dados:
-        raise ValueError("payload precisa conter device_id e temperatura")
-
-    return dados
+    print(json.dumps({"ALERTA": True, "patient_id": patient_id, "bpm": bpm, "spo2": spo2, "motivo": texto}))
+    return {"statusCode": 200, "body": json.dumps({"gravado": True, "alerta": True})}
