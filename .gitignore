@@ -17,6 +17,7 @@ __pycache__/
 build/
 certs/
 infra/build/
+infra/mosquitto/passwd
 main.tf.bak
 minio-data/
 mosquitto/config/passwd
