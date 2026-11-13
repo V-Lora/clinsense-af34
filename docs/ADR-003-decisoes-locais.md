@@ -2,7 +2,7 @@
 
 # ADR-003 — Decisões de infraestrutura local
 
-## Decisões de infraestrutura local (nov/2026)
+**Contexto:** ajustes feitos durante a montagem do Caminho B, nov/2026
 
 **MinIO removido.** As imagens `minio/minio` foram retiradas do Docker Hub em setembro de 2026, e o `quay.io/minio/minio` fechou os pulls anônimos em 24/09/2026. O armazenamento de objetos passou a ser provido pelo S3 do LocalStack, já presente no ambiente e compatível com a API AWS S3 usada pelo pipeline.
 
