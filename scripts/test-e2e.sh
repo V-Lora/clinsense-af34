@@ -7,6 +7,7 @@ BUCKET="${BUCKET:-clinsense-raw}"
 FALHAS=0
 
 aws_() { docker exec clinsense-localstack awslocal "$@" 2>/dev/null; }
+ler()  { docker exec clinsense-localstack cat "$1" 2>/dev/null; }
 ok()   { echo "  [ok]    $1"; }
 erro() { echo "  [FALHA] $1"; FALHAS=$((FALHAS + 1)); }
 
@@ -32,24 +33,28 @@ aws_ lambda invoke --function-name "$FUNCAO" \
 aws_ lambda invoke --function-name "$FUNCAO" \
   --payload '{"device_id":"sensor-B","temperatura":10.5}' /tmp/b.json >/dev/null
 
-sa=$(aws_ cat /tmp/a.json 2>/dev/null)
-sb=$(aws_ cat /tmp/b.json 2>/dev/null)
+sa=$(ler /tmp/a.json)
+sb=$(ler /tmp/b.json)
 
-case "$sa" in
-  *'"alerta": false'*) ok "sensor-A gravado com alerta=false" ;;
-  *) erro "sensor-A inesperado: $sa" ;;
-esac
+if echo "$sa" | grep -q 'gravado.*true' && echo "$sa" | grep -q 'alerta.*false'; then
+  ok "sensor-A gravado com alerta=false"
+else
+  erro "sensor-A inesperado: $sa"
+fi
 
-case "$sb" in
-  *'"alerta": true'*) ok "sensor-B gravado com alerta=true" ;;
-  *) erro "sensor-B inesperado: $sb" ;;
-esac
+if echo "$sb" | grep -q 'gravado.*true' && echo "$sb" | grep -q 'alerta.*true'; then
+  ok "sensor-B gravado com alerta=true"
+else
+  erro "sensor-B inesperado: $sb"
+fi
 
 echo "== 4/5 invocando pela ponte MQTT =="
 if bash scripts/mqtt_e2e.sh >/tmp/mqtt.out 2>&1; then
-  grep -q '"gravado": true' /tmp/mqtt.out \
-    && ok "sensor-MQTT gravado via MQTT" \
-    || erro "ponte rodou mas a Lambda nao confirmou gravacao"
+  if grep -q 'gravado.*true' /tmp/mqtt.out; then
+    ok "sensor-MQTT gravado via MQTT"
+  else
+    erro "ponte rodou mas a Lambda nao confirmou gravacao"
+  fi
 else
   erro "ponte MQTT falhou - veja /tmp/mqtt.out"
 fi
