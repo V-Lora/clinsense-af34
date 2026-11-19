@@ -88,3 +88,10 @@ do Firehose e invocação da Lambda) e o simulador (média e desvio do enunciado
 da anomalia). As decisões de arquitetura — AP/PACELC, escolha do buffer, divisão
 quente/frio e o recorte da LGPD do oferente — são do grupo. As capturas e o screencast
 foram produzidos por nós, com o ambiente rodando.
+
+## Log imutável para replay
+
+O object store particionado (`leituras/year=/month=/day=/hour=`) é o log imutável do pipeline.
+Se o algoritmo de detecção mudasse e fosse preciso recalcular seis meses, basta reler os prefixos
+por período com DuckDB e reprocessar. O DynamoDB Streams não serve para isso: retém 24 h, e a tabela
+quente expira por TTL no mesmo prazo. O frio no MinIO é a única cópia que sobrevive à janela.
