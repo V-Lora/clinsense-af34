@@ -1,90 +1,96 @@
-# ClinSense - AF34 IoT e Big Data
+# ClinSense — AF34 IoT e Big Data
 
-Projeto academico de simulacao de telemetria de sensores.
+Telemonitoramento de pacientes crônicos com pulseiras IoT. Projeto acadêmico da
+disciplina Arquiteturas de Computação para IoT e Big Data (04803-80), turma 493-02AN.
 
-## Caminho escolhido
+## Personalização do grupo
 
-Caminho B - execucao local com Docker, LocalStack e Mosquitto.
-
-O README anterior citava MinIO como camada de objeto. O ambiente implementado
-usa o S3 do LocalStack para o mesmo papel: o payload bruto de cada leitura fica
-em s3://clinsense-raw/leituras/{device_id}/{timestamp}.json. O MinIO nao faz
-parte da entrega.
-
-Justificativa registrada em docs/ADR-001-pipeline.md.
+| Dimensão | Escolha |
+|---|---|
+| Cidade da unidade | São Caetano do Sul |
+| Oferente externo (A.3) | SaudePlan — operadora de plano de saúde |
+| Paciente anômalo | P246 |
+| Caminho | B — LocalStack + Docker Compose |
 
 ## Fluxo
 
-    MQTT (sensor) -> ponte -> Lambda -> S3 (payload bruto)
-                                      -> DynamoDB (serie temporal)
-                                      -> SNS (alerta quando temperatura > 8 C)
+    Pulseira (MQTT) -> Mosquitto -> bridge -> S3/MinIO    (frio, JSON cru particionado)
+                                  -> Lambda detector -> DynamoDB quente (TTL 24h)
+                                                     -> DynamoDB alertas (TTL 30d)
+                                                     -> SNS (BPM > 120, BPM < 50 ou SpO2 < 92)
+
+Duas pipelines paralelas: o frio é gravado pela bridge, o quente e o alerta pelo
+detector. Não há log distribuído intermediário nem conversão para Parquet.
 
 ## Componentes
 
-| Recurso         | Nome                 |
-|-----------------|----------------------|
-| Bucket S3       | clinsense-raw        |
-| Tabela DynamoDB | clinsense-leituras   |
-| Topico SNS      | clinsense-alertas    |
-| Funcao Lambda   | clinsense-processador|
-| Topico MQTT     | clinsense/leituras   |
+| Recurso | Nome |
+|---|---|
+| Object store (frio) | bucket `clinsense-raw`, prefixo `leituras/year=/month=/day=/hour=` |
+| DynamoDB (quente) | `clinsense_quente`, TTL 24 h |
+| DynamoDB (alertas) | `clinsense_alertas`, TTL 30 dias |
+| Tópico SNS | `clinsense-alertas` |
+| Função Lambda | `clinsense-processador` (Python 3.12) |
+| Broker MQTT | Mosquitto, autenticação por usuário/senha gerada no `up.sh` |
+| Tópico MQTT | `clinsense/pacientes/{patient_id}/telemetria` |
 
-## Pre-requisitos
+## Pré-requisitos
 
 - Docker e Docker Compose
 - Terraform >= 1.6
+- Python 3 com `boto3` e `duckdb` (use `.venv`)
 
 ## Como subir
 
-    docker compose up -d
-    sleep 75
+    ./scripts/up.sh
     cd infra && terraform apply -auto-approve
 
-O sleep e necessario: o LocalStack leva cerca de 60 segundos para aceitar
-comandos, e o healthcheck do compose reflete isso.
+O `up.sh` é idempotente: gera `MQTT_PASSWORD` e `MINIO_ROOT_PASSWORD` com
+`openssl rand` se estiverem vazios, escreve o `passwd` do Mosquitto e sobe os
+três containers com as portas presas em 127.0.0.1.
 
 ## Como validar
 
-    bash scripts/test-e2e.sh
+    ./scripts/demo.sh 130      # simulador de 10 pulseiras por 130 s
+    bash scripts/evidence.sh   # containers, tabelas, detector, object store e consulta analítica
+
+A consulta analítica usa DuckDB sobre o JSON do object store, com `read_json_auto`.
 
 ## Como derrubar
 
     ./scripts/down.sh
+    docker ps -aq --filter name=clinsense-localstack-lambda | xargs -r docker rm
 
-## Decisoes registradas
+O segundo comando remove os containers efêmeros que o LocalStack cria por
+invocação de Lambda e que o `down.sh` não alcança.
 
-- docs/ADR-001-pipeline.md - provisionamento e prevencao de recursao SNS
-- docs/ADR-002-ingestao-mqtt.md - ponte MQTT e gravacao no data lake
-- docs/STATUS.md - estado atual da entrega
+## Decisões registradas
 
-## Limitacao conhecida
-
-O ambiente nao e reproduzivel de forma automatica. Ao reiniciar os containers,
-o DynamoDB preserva o estado mas S3, Lambda, SNS e IAM se perdem e exigem
-terraform apply. O bucket volta vazio, entao registros antigos da tabela ficam
-sem objeto correspondente e devem ser removidos manualmente.
+- `docs/ADR-001-pipeline.md` — escolha do Caminho B e do buffer gerenciado
+- `docs/ADR-002-ingestao-mqtt.md` — ponte MQTT e gravação no data lake
+- `docs/ADR-003-decisoes-locais.md` — decisões específicas do ambiente local
 
 ## Log imutável para replay
 
-O log imutável do pipeline é o object store (MinIO no Caminho B, S3 no Caminho A):
-cada leitura fica como JSON cru particionado em year=/month=/day=/hour= e nunca é
-reescrita. Se o algoritmo de detecção mudasse amanhã e precisasse recalcular seis
-meses, a resposta seria uma nova varredura nesse prefixo — os dados originais
-continuam intactos.
+O object store é o log imutável do pipeline: cada leitura fica como JSON cru
+particionado em `year=/month=/day=/hour=` e nunca é reescrita. Se o algoritmo de
+detecção mudasse e precisasse recalcular seis meses, a resposta seria uma nova
+varredura nesse prefixo — os dados originais continuam intactos.
 
-O DynamoDB Streams não serve para isso. Sua retenção máxima é de 24 horas, e a
-tabela clinsense_quente apaga por TTL de 24 h por definição: é cache com prazo, não
-arquivo. A tabela clinsense_alertas guarda 30 dias do resultado do detector —
+O DynamoDB Streams não serve para isso. A retenção máxima é de 24 horas, e a tabela
+`clinsense_quente` apaga por TTL de 24 h por definição: é cache com prazo, não
+arquivo. A tabela `clinsense_alertas` guarda 30 dias do resultado do detector —
 também insuficiente para recalcular seis meses.
+
+## Limitação conhecida
+
+O Firehose existe no LocalStack (a criação via API responde com ARN válido), mas o
+provider Terraform recebe `UnrecognizedClientException` no `CreateDeliveryStream`.
+Para não bloquear a entrega, a bridge assume a gravação e produz a mesma partição
+`year=/month=/day=/hour=` diretamente no object store. O bloco Terraform está em
+`infra/pipeline_firehose.tf.desativado` e na AWS real sobe sem alteração de código.
 
 ## Autoria e uso de IA
 
-Usamos assistência de IA para levantar o esqueleto inicial do docker-compose.yml, o
-boilerplate do handler da Lambda, a estrutura dos scripts de demonstração e a redação
-inicial da Parte A do relatório. Revisamos manualmente e corrigimos: o handler
-(guard contra a recursão do SNS, leitura de Records e chave patient_id+ts), o up.sh
-(geração de senha por openssl rand e idempotência), o bridge.py (tolerância à ausência
-do Firehose e invocação da Lambda) e o simulador (média e desvio do enunciado, janela
-da anomalia). As decisões de arquitetura — AP/PACELC, escolha do buffer, divisão
-quente/frio e o recorte da LGPD do oferente — são do grupo. As capturas e o screencast
-foram produzidos por nós, com o ambiente rodando.
+Ver `AUTORIA.md`, que declara as ferramentas utilizadas, os trechos apoiados e onde
+houve revisão manual do grupo.
