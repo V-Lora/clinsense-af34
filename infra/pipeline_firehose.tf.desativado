@@ -1,0 +1,16 @@
+// DESATIVADO: LocalStack retorna UnrecognizedClientException em CreateDeliveryStream.
+// A particao year/month/day/hour e produzida por bridge/bridge.py no MinIO.
+
+resource "aws_kinesis_firehose_delivery_stream" "frio" {
+  name        = "clinsense-frio"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn           = aws_iam_role.firehose.arn
+    bucket_arn         = "arn:aws:s3:::clinsense-raw"
+    prefix             = "leituras/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+    buffering_size     = 1
+    buffering_interval = 60
+    compression_format = "UNCOMPRESSED"
+  }
+}
