@@ -13,7 +13,7 @@ BUCKET = os.getenv("BUCKET_FRIO", "clinsense-raw")
 HOST = os.getenv("MQTT_HOST", "127.0.0.1")
 PORT = int(os.getenv("MQTT_PORT", "1883"))
 USER = os.getenv("MQTT_USER", "clinsense")
-PWD = os.getenv("MQTT_PASSWORD", "")
+PWD = os.getenv("MQTT_PASSWORD") or os.getenv("MQTT_PASS", "")
 
 MINIO_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_PWD = os.getenv("MINIO_ROOT_PASSWORD", "")

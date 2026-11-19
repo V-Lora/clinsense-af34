@@ -20,7 +20,7 @@ T_DURACAO = float(os.getenv("ANOMALIA_DURACAO", "180"))
 HOST = os.getenv("MQTT_HOST", "127.0.0.1")
 PORT = int(os.getenv("MQTT_PORT", "1883"))
 USER = os.getenv("MQTT_USER", "clinsense")
-PWD = os.getenv("MQTT_PASSWORD", "")
+PWD = os.getenv("MQTT_PASSWORD") or os.getenv("MQTT_PASS", "")
 
 parar = threading.Event()
 

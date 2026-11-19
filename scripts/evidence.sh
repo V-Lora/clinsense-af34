@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+[ -f .venv/bin/activate ] && . .venv/bin/activate
+
+echo "=== 0. personalizacao do grupo ==="
+set -a; . ./.env; set +a
+echo "    unidade : ${CIDADE_UNIDADE:-nao definida}"
+echo "    oferente: ${OFERENTE_NOME:-nao definido}"
+echo "    paciente: ${PACIENTE_ANOMALO:-nao definido}"
+echo
+
 set -u
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
