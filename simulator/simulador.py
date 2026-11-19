@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
-ANOMALO = os.getenv("PACIENTE_ANOMALO", "P123")
+ANOMALO = os.getenv("PACIENTE_ANOMALO", "P246")
 TOTAL = int(os.getenv("TOTAL_PULSEIRAS", "10"))
 INTERVALO = float(os.getenv("INTERVALO_SEGUNDOS", "5"))
 T_INICIO = float(os.getenv("ANOMALIA_INICIO", "120"))
