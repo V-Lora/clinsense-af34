@@ -25,3 +25,4 @@ mosquitto/data/
 logs/
 prints/
 pipeline_firehose.tf.desativado
+mosquitto/
